@@ -18,14 +18,18 @@ export default function Dashboard() {
     const companies = useMemo(() => {
         const map = new Map<string, FirmData[]>();
         data.forEach((row) => {
-            if (row.year >= 2017 && row.year <= 2021) {
-                if (!map.has(row.name)) {
-                    map.set(row.name, []);
-                }
-                map.get(row.name)?.push(row);
+            if (!map.has(row.name)) {
+                map.set(row.name, []);
             }
+            map.get(row.name)?.push(row);
         });
         return map;
+    }, [data]);
+
+    const allYears = useMemo(() => {
+        const years = new Set<number>();
+        data.forEach(row => years.add(row.year));
+        return Array.from(years).sort((a, b) => a - b);
     }, [data]);
 
     const firmNames = useMemo(() => Array.from(companies.keys()).sort(), [companies]);
@@ -34,16 +38,16 @@ export default function Dashboard() {
     const filteredFirms = useMemo(() => {
         if (!searchQuery) return [];
         return firmNames.filter(name =>
-            name.toLowerCase().includes(searchQuery.toLowerCase())
+            name && typeof name === 'string' && name.toLowerCase().includes(searchQuery.toLowerCase())
         ).slice(0, 10); // Limit to 10
     }, [firmNames, searchQuery]);
 
 
     const hasValidData = (rows: FirmData[]) => {
-        const yearSet = new Set(rows.map(r => r.year));
-        const years = [2017, 2018, 2019, 2020, 2021];
-        for (let i = 0; i < years.length - 1; i++) {
-            if (yearSet.has(years[i]) && yearSet.has(years[i + 1])) {
+        if (rows.length < 2) return false;
+        const sortedRows = [...rows].sort((a, b) => a.year - b.year);
+        for (let i = 0; i < sortedRows.length - 1; i++) {
+            if (sortedRows[i].year + 1 === sortedRows[i + 1].year) {
                 return true;
             }
         }
@@ -80,14 +84,15 @@ export default function Dashboard() {
         // Sort logic
         const firmData = companies.get(selectedFirm)!.sort((a, b) => a.year - b.year);
         const yearMap = new Map(firmData.map(r => [r.year, r]));
-        const years = [2017, 2018, 2019, 2020, 2021];
+        const sortedYears = firmData.map(r => r.year);
         const calcResults = [];
 
-        for (let i = 0; i < years.length - 1; i++) {
-            const yPrev = years[i];
-            const yCurr = years[i + 1];
+        for (let i = 0; i < sortedYears.length - 1; i++) {
+            const yPrev = sortedYears[i];
+            const yCurr = sortedYears[i + 1];
 
-            if (yearMap.has(yPrev) && yearMap.has(yCurr)) {
+            // Only calculate for consecutive years
+            if (yCurr === yPrev + 1) {
                 const prev = yearMap.get(yPrev)!;
                 const curr = yearMap.get(yCurr)!;
 
@@ -243,7 +248,7 @@ export default function Dashboard() {
                                 <h3 className="font-semibold text-purple-300 mb-2">How to use</h3>
                                 <ul className="list-disc list-inside space-y-1">
                                     <li>Select a firm from the <strong>Top 50</strong> list on the left or use the <strong>Search</strong> bar.</li>
-                                    <li>The system automatically analyzes financial data for consecutive years (2017-2021).</li>
+                                    <li>The system automatically analyzes financial data for all available consecutive years (2008-2023).</li>
                                     <li>Firms without consecutive data are excluded from the Top 50 list.</li>
                                 </ul>
                             </div>
