@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { DataManager, FirmData } from "./DataManager";
 import { GlassCard } from "./ui/GlassCard";
 import { MetricChart } from "./MetricChart";
 import { MetricTable } from "./MetricTable";
+import { YearRangeFilter } from "./YearRangeFilter";
+import { ExportButtons } from "./ExportButtons";
 import { Search, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,18 +15,30 @@ export default function Dashboard() {
     const [selectedFirm, setSelectedFirm] = useState<string>("");
     const [searchQuery, setSearchQuery] = useState("");
     const [executionTime, setExecutionTime] = useState<number | null>(null);
+    const [yearRange, setYearRange] = useState<{ from: number; to: number } | null>(null);
+    const exportRef = useRef<HTMLDivElement>(null);
 
+    // Memoized callback to prevent infinite loops
+    const handleYearRangeChange = useCallback((from: number, to: number) => {
+        setYearRange({ from, to });
+    }, []);
+
+    // Filter data by year range
+    const filteredData = useMemo(() => {
+        if (!yearRange) return data;
+        return data.filter(row => row.year >= yearRange.from && row.year <= yearRange.to);
+    }, [data, yearRange]);
 
     const companies = useMemo(() => {
         const map = new Map<string, FirmData[]>();
-        data.forEach((row) => {
+        filteredData.forEach((row) => {
             if (!map.has(row.name)) {
                 map.set(row.name, []);
             }
             map.get(row.name)?.push(row);
         });
         return map;
-    }, [data]);
+    }, [filteredData]);
 
     const allYears = useMemo(() => {
         const years = new Set<number>();
@@ -135,12 +149,21 @@ export default function Dashboard() {
                     <p className="text-white/50 mt-1">Financial Cloud Calculator</p>
                 </div>
 
-                {executionTime !== null && (
-                    <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-mono text-green-400">
-                        <Clock className="w-4 h-4" />
-                        {executionTime.toFixed(2)}ms
-                    </div>
-                )}
+                <div className="flex items-center gap-4 flex-wrap">
+                    {selectedFirm && (
+                        <ExportButtons
+                            targetRef={exportRef}
+                            fileName={`${selectedFirm.replace(/[^a-z0-9]/gi, '_')}_analysis`}
+                        />
+                    )}
+
+                    {executionTime !== null && (
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-mono text-green-400">
+                            <Clock className="w-4 h-4" />
+                            {executionTime.toFixed(2)}ms
+                        </div>
+                    )}
+                </div>
             </header>
 
             {/* Data Section */}
@@ -149,6 +172,14 @@ export default function Dashboard() {
                 {/* Sidebar / Controls */}
                 <div className="space-y-6 lg:col-span-4">
                     <DataManager onDataLoaded={setData} />
+
+                    {data.length > 0 && allYears.length > 0 && (
+                        <YearRangeFilter
+                            minYear={allYears[0]}
+                            maxYear={allYears[allYears.length - 1]}
+                            onRangeChange={handleYearRangeChange}
+                        />
+                    )}
 
                     {data.length > 0 && (
                         <div className="space-y-6">
@@ -226,10 +257,17 @@ export default function Dashboard() {
                 {/* Main Content */}
                 <div className="lg:col-span-8 space-y-6">
                     {selectedFirm && results.length > 0 ? (
-                        <>
+                        <div ref={exportRef} className="export-container space-y-6 bg-[#0a0a0a] p-6 rounded-2xl">
+                            {/* Company Header for Export */}
+                            <div className="px-6 py-4 rounded-2xl bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-red-500/10">
+                                <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">
+                                    Company: {selectedFirm}
+                                </h2>
+                            </div>
+
                             <MetricChart data={results} firmName={selectedFirm} />
                             <MetricTable results={results} />
-                        </>
+                        </div>
                     ) : (
                         <div className="h-full flex items-center justify-center p-12 text-center text-white/20 border-2 border-dashed border-white/5 rounded-3xl">
                             {data.length === 0 ? "Please load a dataset to begin." :
